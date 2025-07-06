@@ -3,10 +3,6 @@ import { Event } from './Event.jsx';
 import { TABS, TABS_KEYS, generateItems } from '../data/tabs.js';
 
 export function Main() {
-    React.useEffect(() => {
-        import('/styles.css');
-    }, []);
-
     const ref = React.useRef();
     const initedRef = React.useRef(false);
     const [activeTab, setActiveTab] = React.useState('');
@@ -30,30 +26,43 @@ export function Main() {
 
     React.useEffect(() => {
         if (sizes.length > 0 && ref.current) {
-            const sumWidth = sizes.reduce((acc, item) => acc + item.width, 0);
-            const newHasRightScroll = sumWidth > ref.current.offsetWidth;
-            if (newHasRightScroll !== hasRightScroll) {
-                setHasRightScroll(newHasRightScroll);
+            const container = ref.current;
+            const containerWidth = container.offsetWidth;
+            const containerHeight = container.offsetHeight;
+            const itemWidth = sizes[0].width;
+            const itemHeight = sizes[0].height;
+            const itemsPerRow = Math.floor(containerWidth / itemWidth);
+            const itemsPerColumn = Math.floor(containerHeight / itemHeight);
+            const totalItems = itemsPerRow * itemsPerColumn;
+            
+            if (totalItems > 0) {
+                const items = generateItems(TABS[activeTab]?.items || [], totalItems);
+                setItems(items);
             }
         }
-    });
+    }, [activeTab, sizes]);
 
-    const onArrowCLick = () => {
-        const scroller = ref.current.querySelector('.section__panel:not(.section__panel_hidden)');
-        if (scroller) {
-            scroller.scrollTo({
-                left: scroller.scrollLeft + 400,
-                behavior: 'smooth'
-            });
+    const [items, setItems] = React.useState([]);
+
+    const onScroll = () => {
+        if (ref.current) {
+            const { scrollLeft, scrollWidth, clientWidth } = ref.current;
+            setHasRightScroll(scrollLeft < scrollWidth - clientWidth - 1);
         }
     };
 
-    // Оптимизированный алгоритм создания айтемов
-    const optimizedTabs = React.useMemo(() => {
-        const tabs = { ...TABS };
-        tabs.all.items = generateItems();
-        return tabs;
-    }, []);
+    React.useEffect(() => {
+        const container = ref.current;
+        if (container) {
+            container.addEventListener('scroll', onScroll);
+            onScroll();
+            return () => container.removeEventListener('scroll', onScroll);
+        }
+    });
+
+    const onTabClick = tab => {
+        setActiveTab(tab);
+    };
 
     return (
         <main className="main">
@@ -154,53 +163,41 @@ export function Main() {
                     <select className="section__select" defaultValue="all" onInput={onSelectInput}>
                         {TABS_KEYS.map(key =>
                             <option key={key} value={key}>
-                                {optimizedTabs[key].title}
+                                {TABS[key].title}
                             </option>
                         )}
                     </select>
 
-                    <ul role="tablist" className="section__tabs">
-                        {TABS_KEYS.map(key =>
-                            <li
+                    <div className="section__tabs">
+                        {TABS_KEYS.map(key => (
+                            <button
                                 key={key}
-                                role="tab"
-                                aria-selected={key === activeTab ? 'true' : 'false'}
-                                tabIndex={key === activeTab ? '0' : undefined}
-                                className={'section__tab' + (key === activeTab ? ' section__tab_active' : '')}
-                                id={`tab_${key}`}
-                                aria-controls={`panel_${key}`}
-                                onClick={() => setActiveTab(key)}
+                                className={'section__tab' + (activeTab === key ? ' section__tab_active' : '')}
+                                onClick={() => onTabClick(key)}
                             >
-                                {optimizedTabs[key].title}
-                            </li>
-                        )}
-                    </ul>
+                                {TABS[key].title}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
-                <div className="section__panel-wrapper" ref={ref}>
-                    {TABS_KEYS.map(key =>
-                        <div 
-                            key={key} 
-                            role="tabpanel" 
-                            className={'section__panel' + (key === activeTab ? '' : ' section__panel_hidden')} 
-                            aria-hidden={key === activeTab ? 'false' : 'true'} 
-                            id={`panel_${key}`} 
-                            aria-labelledby={`tab_${key}`}
-                        >
-                            <ul className="section__panel-list">
-                                {optimizedTabs[key].items.map((item, index) =>
-                                    <Event
-                                        key={index}
-                                        {...item}
-                                        onSize={onSize}
-                                    />
-                                )}
-                            </ul>
-                        </div>
+                <div className="section__panel" ref={ref}>
+                    <div className="section__panel-wrapper">
+                        <ul className="section__panel-list">
+                            {items.map((item, index) => (
+                                <Event
+                                    key={index}
+                                    {...item}
+                                    onSize={onSize}
+                                />
+                            ))}
+                        </ul>
+                    </div>
+                    {hasRightScroll && (
+                        <button className="section__arrow" aria-label="Показать больше">
+                            <span></span>
+                        </button>
                     )}
-                    {hasRightScroll &&
-                        <div className="section__arrow" onClick={onArrowCLick}></div>
-                    }
                 </div>
             </section>
         </main>
